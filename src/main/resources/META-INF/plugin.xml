@@ -1,0 +1,53 @@
+<idea-plugin>
+    <id>com.lihanghang.whatisthis</id>
+    <name>WhatIsThis</name>
+    <vendor email="lixiaohang426232@gmail.com" url="https://github.com/404meters-ha">404meters-ha</vendor>
+
+    <description><![CDATA[
+    <p><strong>WhatIsThis</strong> — select anything, press one shortcut, get an instant answer about what it is.</p>
+    <p><strong>选中任何东西，一键发问，瞬间告诉你“这是干嘛的”。</strong></p>
+    <ul>
+      <li>📸 Screenshot / 截图：clipboard image → what is this button / UI control / code snippet / error message?</li>
+      <li>💻 Code selection / 选中代码：what it does, syntax sugar used, and its likely role in your project.</li>
+      <li>📄 File / 文件：right-click any file in the editor or Project View and ask.</li>
+      <li>⚡ Built for speed: single streaming API call, concise &le;200-character answers, follow-up questions in the same popup.</li>
+      <li>🔑 Bring your own key: DeepSeek, Doubao Ark, Zhipu GLM, Moonshot Kimi, Alibaba Qwen, OpenAI, or any OpenAI-compatible endpoint. Keys are stored in the IDE PasswordSafe.</li>
+    </ul>
+    <p><em>Privacy: screenshots and code you ask about are sent to the LLM provider you configure yourself. 截图与代码将发送至你自行配置的大模型服务商。</em></p>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <applicationService serviceImplementation="com.lihanghang.whatisthis.settings.WhatIsThisSettings"/>
+        <applicationConfigurable parentId="tools" id="WhatIsThisConfigurable"
+                                 displayName="WhatIsThis"
+                                 instance="com.lihanghang.whatisthis.settings.WhatIsThisConfigurable"/>
+        <notificationGroup id="WhatIsThis" displayType="BALLOON"/>
+    </extensions>
+
+    <actions>
+        <!-- Smart route: editor selection > clipboard image > clipboard text -->
+        <action id="WhatIsThis.Ask"
+                class="com.lihanghang.whatisthis.action.WhatIsThisAskAction"
+                text="What Is This?"
+                description="Ask WhatIsThis about the current selection or clipboard content"
+                icon="/icons/whatisthis16.svg">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="control alt W"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="meta alt W"/>
+        </action>
+
+        <!-- Context menu: editor selection / whole file / project-view file -->
+        <action id="WhatIsThis.AskContext"
+                class="com.lihanghang.whatisthis.action.WhatIsThisContextAction"
+                text="What Is This?"
+                description="Ask WhatIsThis about this selection or file"
+                icon="/icons/whatisthis16.svg">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+            <add-to-group group-id="EditorTabPopupMenu" anchor="last"/>
+        </action>
+    </actions>
+
+</idea-plugin>
