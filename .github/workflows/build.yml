@@ -45,10 +45,30 @@ jobs:
           name: whatisthis-${{ steps.properties.outputs.version }}
           path: build/distributions/*.zip
 
-  release:
-    name: Publish to Marketplace
+  github-release:
+    name: GitHub Release
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: whatisthis-${{ needs.build.outputs.version }}
+
+      - name: Create GitHub Release with plugin zip
+        uses: softprops/action-gh-release@v2
+        with:
+          files: whatisthis-*.zip
+          generate_release_notes: true
+
+  marketplace:
+    name: Publish to Marketplace
+    needs: build
+    # Skipped (not failed) until JETBRAINS_TOKEN is configured as a secret.
+    if: startsWith(github.ref, 'refs/tags/v') && secrets.JETBRAINS_TOKEN != ''
     runs-on: ubuntu-latest
     environment: marketplace
     steps:

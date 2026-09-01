@@ -1,8 +1,12 @@
 # WhatIsThis Changelog
 
-## 1.0.0-SNAPSHOT
+## 1.0.0
 
 - 初版：快捷键 `Ctrl+Alt+W` 智能路由（选中代码 / 剪贴板截图 / 剪贴板文本），编辑器与 Project View 右键菜单
 - 流式回答 + popup 内追问；视觉模型白名单提醒
 - 服务商预设：DeepSeek（默认）、豆包·火山方舟、智谱 GLM、Kimi、阿里百炼 Qwen、OpenAI、自定义 OpenAI 兼容端点
 - API Key 存 PasswordSafe；测试连接；回答语言可配（默认中文）
+- 弹窗显示所发内容的截断预览（首行标题 + 前 6 行代码块，诚实标注截断）
+- 修复思考型模型（DeepSeek V4 系等）"思考烧完 token、正文为零"的空答案问题：输出上限提至 4096，可关闭思考的模型自动附带 `thinking: disabled`
+- 智谱 GLM 新增 `glm-5.3-flash` 建议（原生多模态，不支持关闭思考，自动豁免）
+- 弹窗关闭多路径加固：Esc 键绑定 + 头部 ✕ 按钮 + 失焦自动关闭，兼容实验性 UI 下平台关闭链路失灵的情况

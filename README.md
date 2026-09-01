@@ -3,6 +3,10 @@
 > 选中任何东西，一键发问，瞬间告诉你"这是干嘛的"。
 > Select anything, press one shortcut, get an instant answer about what it is.
 
+[![Build & Verify](https://github.com/404meters-ha/whatisthis/actions/workflows/build.yml/badge.svg)](https://github.com/404meters-ha/whatisthis/actions/workflows/build.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![IntelliJ Platform](https://img.shields.io/badge/IntelliJ%20Platform-2024.3%2B-blue)](https://plugins.jetbrains.com/docs/intellij/build-number-ranges.html)
+
 **WhatIsThis** 是一个 IntelliJ 平台插件（全家桶通用：IDEA / PyCharm / WebStorm / GoLand / CLion …），让你对**截图、选中代码、文件**一键提问，AI 流式秒回"这是干嘛用的"。
 
 ## ✨ 特性 / Features
@@ -18,6 +22,14 @@
 - 💬 **追问**：popup 底部输入框直接追问（Enter 发送，Shift+Enter 换行），Esc 关闭即弃
 - 🔑 **自带 Key**：DeepSeek / 豆包·火山方舟 / 智谱 GLM / Kimi / 阿里百炼 Qwen / OpenAI / 任意 OpenAI 兼容端点，Key 存于 IDE PasswordSafe 加密存储
 - 🖼️ **视觉模型守护**：所选模型可能不支持图片时提前提醒，可"仍然发送"
+
+## 📦 安装 / Install
+
+**从 GitHub Releases 安装（推荐）**：到 [Releases](https://github.com/404meters-ha/whatisthis/releases) 下载最新 `whatisthis-1.0.0.zip`，然后 `Settings → Plugins → ⚙️ → Install Plugin from Disk...` 选择 zip，重启 IDE。
+
+> JetBrains Marketplace 上架筹备中。/ Pending review on JetBrains Marketplace.
+
+兼容 IntelliJ Platform **2024.3+** 全家桶（IDEA / PyCharm / WebStorm / GoLand / CLion / DataGrip / RustRover …）。
 
 ## 🚀 快速开始
 
@@ -56,7 +68,7 @@
 
 ### 发布（维护者）
 
-打 tag `v*` 会触发 GitHub Actions 构建并发布到 JetBrains Marketplace（需要配置 secrets：`JETBRAINS_TOKEN`）。
+打 tag `v*` 会触发 GitHub Actions：构建并校验 → 附 zip 产物创建 GitHub Release → （若配置了 `JETBRAINS_TOKEN`）发布到 JetBrains Marketplace。
 
 ## License
 
