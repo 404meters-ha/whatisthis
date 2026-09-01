@@ -7,6 +7,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![IntelliJ Platform](https://img.shields.io/badge/IntelliJ%20Platform-2024.3%2B-blue)](https://plugins.jetbrains.com/docs/intellij/build-number-ranges.html)
 
+![demo](design/whatisthis-demo.gif)
+
 **WhatIsThis** 是一个 IntelliJ 平台插件（全家桶通用：IDEA / PyCharm / WebStorm / GoLand / CLion …），让你对**截图、选中代码、文件**一键提问，AI 流式秒回"这是干嘛用的"。
 
 ## ✨ 特性 / Features
