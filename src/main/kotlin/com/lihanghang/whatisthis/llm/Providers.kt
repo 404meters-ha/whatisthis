@@ -13,6 +13,17 @@ data class ProviderPreset(
     /** Prefixes of models known to accept image input. */
     val visionModelPrefixes: List<String> = listOf(),
     val keyUrl: String = "",
+    /**
+     * Provider accepts `{"thinking": {"type": "disabled"}}` to switch off
+     * built-in chain-of-thought. Only set for providers that document the
+     * parameter - strict endpoints (OpenAI) reject unknown body fields.
+     */
+    val thinkingSwitch: Boolean = false,
+    /**
+     * Model prefixes whose `thinking.type` only accepts `enabled` (e.g.
+     * GLM-5.3-Flash 不支持关闭思考) - never send `disabled` to these.
+     */
+    val thinkingAlwaysOnPrefixes: List<String> = listOf(),
 )
 
 object Providers {
@@ -40,6 +51,7 @@ object Providers {
             ),
             visionModelPrefixes = listOf("deepseek-v4-flash-vision", "deepseek-v4-pro"),
             keyUrl = "https://platform.deepseek.com/api_keys",
+            thinkingSwitch = true,
         ),
         ProviderPreset(
             id = "doubao",
@@ -56,15 +68,18 @@ object Providers {
                 "doubao-vision",
             ),
             keyUrl = "https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey",
+            thinkingSwitch = true,
         ),
         ProviderPreset(
             id = "zhipu",
             displayName = "智谱 GLM",
             baseUrl = "https://open.bigmodel.cn/api/paas/v4",
             defaultModel = "glm-4.5v",
-            modelSuggestions = listOf("glm-4.5v", "glm-4.6v", "glm-4.5-air"),
-            visionModelPrefixes = listOf("glm-4.5v", "glm-4.6v", "glm-4v"),
+            modelSuggestions = listOf("glm-5.3-flash", "glm-4.5v", "glm-4.6v", "glm-4.5-air"),
+            visionModelPrefixes = listOf("glm-5.3-flash", "glm-4.5v", "glm-4.6v", "glm-4v"),
             keyUrl = "https://open.bigmodel.cn/usercenter/apikeys",
+            thinkingSwitch = true,
+            thinkingAlwaysOnPrefixes = listOf("glm-5.3-flash"),
         ),
         ProviderPreset(
             id = "moonshot",
@@ -107,4 +122,14 @@ object Providers {
      */
     fun isKnownVision(id: String, model: String): Boolean =
         byId(id).visionModelPrefixes.any { prefix -> model.startsWith(prefix, ignoreCase = true) }
+
+    /**
+     * Whether we should send `{"thinking": {"type": "disabled"}}` for [model]:
+     * provider documents the switch AND this model can actually turn thinking off.
+     */
+    fun canDisableThinking(id: String, model: String): Boolean =
+        byId(id).let { preset ->
+            preset.thinkingSwitch &&
+                preset.thinkingAlwaysOnPrefixes.none { model.startsWith(it, ignoreCase = true) }
+        }
 }

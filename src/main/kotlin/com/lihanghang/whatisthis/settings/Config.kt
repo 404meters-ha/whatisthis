@@ -14,6 +14,8 @@ data class EffectiveConfig(
     val language: String,
     /** False = model is not on the known-vision list -> warn before sending screenshots. */
     val knownVision: Boolean,
+    /** True = safe to send `thinking: {"type": "disabled"}` for this provider+model; see [Providers.canDisableThinking]. */
+    val disableThinking: Boolean,
 )
 
 object ConfigResolver {
@@ -38,6 +40,7 @@ object ConfigResolver {
             apiKey = apiKey,
             language = state.language,
             knownVision = Providers.isKnownVision(state.providerId, model),
+            disableThinking = Providers.canDisableThinking(state.providerId, model),
         )
     }
 }

@@ -1,6 +1,10 @@
 package com.lihanghang.whatisthis.ui
 
+import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.editor.colors.EditorFontType
 import com.intellij.ui.JBColor
+import com.intellij.util.ui.JBFont
+import com.intellij.util.ui.JBUI
 
 /**
  * Tiny streaming-friendly Markdown -> HTML converter for a JEditorPane.
@@ -12,8 +16,11 @@ object MarkdownToHtml {
     /** Some models emit thinking blocks; the user asked a quick question - drop them. */
     private val THINK_BLOCK = Regex("(?s)<think>.*?(</think>|$)")
 
+    /** What the user actually gets to read - thinking blocks removed. */
+    fun stripThinking(markdown: String): String = markdown.replace(THINK_BLOCK, "")
+
     fun toHtml(markdown: String): String {
-        val cleaned = markdown.replace(THINK_BLOCK, "")
+        val cleaned = stripThinking(markdown)
         val css = css()
         val body = StringBuilder()
         var inFence = false
@@ -61,12 +68,19 @@ object MarkdownToHtml {
         val codeColor = if (bright) "#8250df" else "#d2a8ff"
         val preBg = if (bright) "#f6f8fa" else "#2b2d30"
         val preFg = if (bright) "#24292f" else "#dfe1e5"
-        val font = javax.swing.UIManager.getFont("Label.font")?.family ?: "sans-serif"
+        // Follow the IDE's fonts and scale (HiDPI, IDE zoom, custom font sizes)
+        // instead of hardcoding pt sizes that ignore all of it.
+        val bodyFont = JBFont.label()
+        val editorFont = runCatching {
+            EditorColorsManager.getInstance().globalScheme.getFont(EditorFontType.PLAIN)
+        }.getOrNull()
+        val monoFamily = editorFont?.family ?: "monospace"
+        val monoSize = editorFont?.let { JBUI.scale(it.size) } ?: bodyFont.size
         return """
-            body { font-family: '$font'; font-size: 10pt; }
-            pre  { background: $preBg; color: $preFg; font-family: '${font} Mono', monospace;
-                   font-size: 9pt; padding: 4px 6px; }
-            code { color: $codeColor; font-family: '${font} Mono', monospace; }
+            body { font-family: '${bodyFont.family}'; font-size: ${bodyFont.size}px; }
+            pre  { background: $preBg; color: $preFg; font-family: '$monoFamily', monospace;
+                   font-size: ${monoSize}px; padding: 4px 6px; }
+            code { color: $codeColor; font-family: '$monoFamily', monospace; }
         """.trimIndent()
     }
 }

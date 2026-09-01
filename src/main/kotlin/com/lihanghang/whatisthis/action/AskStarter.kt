@@ -13,6 +13,7 @@ import com.lihanghang.whatisthis.settings.ConfigResolver
 import com.lihanghang.whatisthis.settings.EffectiveConfig
 import com.lihanghang.whatisthis.settings.WhatIsThisConfigurable
 import com.lihanghang.whatisthis.ui.AskPopup
+import com.lihanghang.whatisthis.ui.Preview
 import com.lihanghang.whatisthis.util.CodeContext
 import com.lihanghang.whatisthis.util.ImageCodec
 import java.awt.Image
@@ -28,8 +29,9 @@ object AskStarter {
         val popup = AskPopup(project, editor, config)
         popup.open(kind)
         popup.askText(
-            displayLabel = previewOf(body),
+            displayLabel = Preview.label(body),
             messageText = Prompts.textUserContent(kind, fileNote, body, languageTag),
+            preview = Preview.block(body),
         )
     }
 
@@ -94,9 +96,6 @@ object AskStarter {
         action?.let { notification.addAction(it) }
         notification.notify(project)
     }
-
-    private fun previewOf(body: String): String =
-        body.lineSequence().firstOrNull { it.isNotBlank() }?.trim()?.take(60) ?: "…"
 }
 
 /** File-note helpers shared by both actions. */

@@ -1,5 +1,6 @@
 package com.lihanghang.whatisthis.ui
 
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
@@ -14,6 +15,7 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
 import com.intellij.util.ui.HTMLEditorKitBuilder
+import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
 import com.lihanghang.whatisthis.WhatIsThisIcons
 import com.lihanghang.whatisthis.llm.LlmClient
@@ -28,20 +30,31 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.awt.BorderLayout
 import java.awt.Dimension
-import java.awt.Font
+import java.awt.Window
 import java.awt.event.ActionEvent
+import java.awt.event.HierarchyEvent
 import java.awt.event.KeyEvent
+import java.awt.event.WindowEvent
+import java.awt.event.WindowFocusListener
 import javax.swing.AbstractAction
 import javax.swing.JButton
+import javax.swing.JComponent
 import javax.swing.JEditorPane
 import javax.swing.JPanel
 import javax.swing.SwingConstants
 import javax.swing.KeyStroke
+import javax.swing.SwingUtilities
 
 /**
  * The one and only surface: a popup that streams the answer, accepts
- * follow-up questions in the same conversation, and dies on Esc - nothing
- * lingers, because lingering is the opposite of 瞬间.
+ * follow-up questions in the same conversation, and dies on Esc, the close
+ * button, or the moment focus moves elsewhere - nothing lingers, because
+ * lingering is the opposite of 瞬间.
+ *
+ * Closing deliberately does not rely on any single platform mechanism: some
+ * IDE builds (notably 2026.1 EAP with the experimental UI) have flaky popup
+ * dismissal, so we stack the platform's own click-outside/Esc handling with
+ * our own Esc binding, a focus-loss listener, and an always-visible ✕.
  */
 class AskPopup(
     private val project: Project,
@@ -69,9 +82,18 @@ class AskPopup(
         preferredSize = Dimension(560, 320)
     }
     private val headerLabel = JBLabel().apply {
-        font = font.deriveFont(Font.BOLD, 12f)
+        font = JBFont.label().asBold()
     }
     private val loadingLabel = JBLabel(" 思考中…", AnimatedIcon.Default(), SwingConstants.LEFT)
+    private val closeButton = JButton(AllIcons.Actions.Close).apply {
+        toolTipText = "关闭（Esc）"
+        isBorderPainted = false
+        isContentAreaFilled = false
+        isFocusPainted = false
+        isFocusable = false
+        preferredSize = JBUI.size(22, 22)
+        addActionListener { closePopup() }
+    }
     private val inputArea = JBTextArea(1, 40).apply {
         emptyText.setText("追问…（Enter 发送，Shift+Enter 换行）")
         lineWrap = true
@@ -84,12 +106,40 @@ class AskPopup(
     }
     private lateinit var popup: JBPopup
 
+    /** Window the focus-loss safety net is attached to; null until shown. */
+    private var focusNetWindow: Window? = null
+
+    /** True once our window has actually held focus; earlier losses are show noise. */
+    private var sawFocusGain = false
+
+    private val focusNet = object : WindowFocusListener {
+        override fun windowGainedFocus(e: WindowEvent?) {
+            sawFocusGain = true
+        }
+
+        override fun windowLostFocus(e: WindowEvent?) {
+            // A loss from a window that never held focus is show noise, not
+            // the user moving away.
+            if (!sawFocusGain) return
+            // Some builds bounce focus to the main frame for one cycle while
+            // the popup is being shown. Re-check once the shuffle settles and
+            // close only if focus really ended up elsewhere.
+            SwingUtilities.invokeLater {
+                if (SwingUtilities.getWindowAncestor(rootPanel)?.isFocused != true) closePopup()
+            }
+        }
+    }
+
     init {
         loadingLabel.isVisible = false
         val header = JPanel(BorderLayout()).apply {
             isOpaque = false
             add(headerLabel, BorderLayout.WEST)
-            add(loadingLabel, BorderLayout.EAST)
+            add(JPanel(BorderLayout(JBUI.scale(4), 0)).apply {
+                isOpaque = false
+                add(loadingLabel, BorderLayout.WEST)
+                add(closeButton, BorderLayout.EAST)
+            }, BorderLayout.EAST)
         }
         val inputRow = JPanel(BorderLayout(JBUI.scale(4), 0)).apply {
             isOpaque = false
@@ -111,7 +161,33 @@ class AskPopup(
     fun open(kind: String) {
         headerLabel.icon = WhatIsThisIcons.Action16
         headerLabel.text = " $kind · ${config.providerName}/${config.model}"
-        val builder = JBPopupFactory.getInstance()
+        popup = createPopup()
+        Disposer.register(popup, this)
+        if (editor != null) {
+            popup.showInBestPositionFor(editor)
+        } else {
+            popup.showInFocusCenter()
+        }
+    }
+
+    /** Builds the popup without showing it - the part tests can drive directly. */
+    internal fun createPopup(): JBPopup {
+        val escapeAction = object : AbstractAction() {
+            override fun actionPerformed(e: ActionEvent?) = closePopup()
+        }
+        // Safety net: if the platform forgets to cancel the popup on focus
+        // loss, close it ourselves the moment its window loses focus. The
+        // window only exists once the popup is shown, hence the hierarchy hook.
+        rootPanel.addHierarchyListener { e ->
+            if (e.changeFlags and HierarchyEvent.PARENT_CHANGED.toLong() == 0L) return@addHierarchyListener
+            val window = SwingUtilities.getWindowAncestor(rootPanel) ?: return@addHierarchyListener
+            if (window === focusNetWindow) return@addHierarchyListener
+            focusNetWindow?.removeWindowFocusListener(focusNet)
+            focusNetWindow = window
+            sawFocusGain = false
+            window.addWindowFocusListener(focusNet)
+        }
+        val built = JBPopupFactory.getInstance()
             .createComponentPopupBuilder(rootPanel, inputArea)
             .setRequestFocus(true)
             .setResizable(true)
@@ -122,23 +198,39 @@ class AskPopup(
                 true
             }
             .setDimensionServiceKey(project, "WhatIsThis.AskPopup", false)
-        popup = builder.createPopup()
-        Disposer.register(popup, this)
-        if (editor != null) {
-            popup.showInBestPositionFor(editor)
-        } else {
-            popup.showInFocusCenter()
+            .createPopup()
+        // Bind Esc on both our panel and the popup's content wrapper: the
+        // focused component's WHEN_IN_FOCUSED_WINDOW chain walks both, and it
+        // keeps working even if the platform's own cancel-key path goes silent.
+        listOf(rootPanel, built.content).forEach { host ->
+            host.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                .put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), ESCAPE_ACTION)
+            host.actionMap.put(ESCAPE_ACTION, escapeAction)
         }
+        popup = built
+        return built
+    }
+
+    private fun closePopup() {
+        if (::popup.isInitialized && !popup.isDisposed) popup.cancel()
+    }
+
+    internal companion object {
+        internal const val ESCAPE_ACTION = "wit-escape"
     }
 
     /**
      * Adds a user turn and starts streaming. [messageText] must already be the
      * final user message (the action layer builds it via [Prompts]); [displayLabel]
-     * is the short line shown in the transcript.
+     * is the short line shown in the transcript, [preview] an optional fenced
+     * code block under it (see [Preview]) so long selections are never a mystery.
      */
-    fun askText(displayLabel: String, messageText: String) {
+    fun askText(displayLabel: String, messageText: String, preview: String? = null) {
         history += "user" to messageText
-        transcript.append("**❓ ").append(displayLabel.take(200)).append("**\n\n")
+        transcript.append("**❓ ").append(displayLabel).append("**\n\n")
+        if (!preview.isNullOrBlank()) {
+            transcript.append("```\n").append(preview).append("\n```\n\n")
+        }
         render(currentAssistant = "")
         startStream()
     }
@@ -163,7 +255,7 @@ class AskPopup(
         val text = inputArea.text.trim()
         if (text.isEmpty() || streaming) return
         inputArea.text = ""
-        askText(displayLabel = text, messageText = text)
+        askText(displayLabel = Preview.label(text), messageText = text, preview = Preview.block(text))
     }
 
     private fun startStream() {
@@ -174,7 +266,16 @@ class AskPopup(
             put("model", config.model)
             put("stream", true)
             put("temperature", 0.3)
-            put("max_tokens", 600)
+            // A cap, not a target - the prompt asks for ≤200 字. It must leave
+            // room for chain-of-thought: on thinking models max_tokens covers
+            // reasoning too, and a tight cap spent on CoT yields an EMPTY
+            // answer that still finishes without error.
+            put("max_tokens", 4096)
+            // 对话+思考一体模型默认开思考（DeepSeek V4 effort=high）：关掉它，
+            // 秒答才是本插件的卖点；temperature 在思考模式下本来也不生效。
+            if (config.disableThinking) {
+                put("thinking", buildJsonObject { put("type", "disabled") })
+            }
             put("messages", buildJsonArray {
                 add(buildJsonObject {
                     put("role", "system")
@@ -209,10 +310,17 @@ class AskPopup(
                 streaming = false
                 val cancelled = handle?.isCancelled == true
                 transcript.append(answer)
-                if (cancelled) {
-                    transcript.append("\n\n<i>（已取消）</i>")
-                } else if (error != null) {
-                    transcript.append("\n\n<font color=\"#e5534b\">⚠️ ").append(escape(describe(error))).append("</font>")
+                when {
+                    cancelled -> transcript.append("\n\n<i>（已取消）</i>")
+                    error != null -> transcript.append("\n\n<font color=\"#e5534b\">⚠️ ")
+                        .append(escape(describe(error)))
+                        .append("</font>")
+                    // A clean finish with nothing visible is a real failure mode:
+                    // thinking-only models can burn the whole budget on CoT.
+                    // Never show a silent blank - same honesty rule as Preview.
+                    MarkdownToHtml.stripThinking(answer.toString()).isBlank() -> transcript.append("\n\n<font color=\"#e5534b\">⚠️ ")
+                        .append("模型未返回答案正文（输出可能被思维链耗尽），请重试或在设置中更换模型。")
+                        .append("</font>")
                 }
                 render(currentAssistant = "")
                 setLoading(false)
@@ -232,7 +340,11 @@ class AskPopup(
     private fun setLoading(loading: Boolean) {
         loadingLabel.isVisible = loading
         sendButton.isEnabled = !loading
-        inputArea.isEnabled = !loading
+        // inputArea stays enabled: it is the popup's focus target, and
+        // disabling it in the same dispatch as show() breaks the focus grant
+        // (focus snaps back to the editor, the focus net sees a loss, and the
+        // popup kills itself). sendFollowUp already guards on [streaming], so
+        // typing ahead while the answer streams is fine.
     }
 
     private fun render(currentAssistant: String) {
@@ -250,5 +362,6 @@ class AskPopup(
 
     override fun dispose() {
         cancelActive()
+        focusNetWindow?.removeWindowFocusListener(focusNet)
     }
 }
