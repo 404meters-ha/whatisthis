@@ -6,3 +6,4 @@ build
 *.zip
 # original screen recording, too heavy for git (75MB); compressed copy is design/whatisthis-demo.gif
 design/whatisthis.gif
+.promotion
