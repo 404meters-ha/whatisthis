@@ -1,12 +1,10 @@
 package com.lihanghang.whatisthis.ui
 
 import com.intellij.icons.AllIcons
-import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
@@ -265,10 +263,19 @@ class AskPopup(
          * The ⏱ 首字/完成 latency probe is a development instrument, not a
          * product feature: it shows in -SNAPSHOT builds only, so a release
          * build can never ship it by forgetting to flip a switch.
+         *
+         * The version comes from the bundled plugin.xml, NOT from
+         * PluginManagerCore/PluginId: compiled against 2025.3 those resolve
+         * to PluginId.Companion, which does not exist on 2024.3 - a binary
+         * incompatibility verifyPlugin caught the hard way.
          */
         private val showTiming: Boolean by lazy {
-            PluginManagerCore.getPlugin(PluginId.getId("com.lihanghang.whatisthis"))
-                ?.version?.contains("SNAPSHOT") == true
+            runCatching {
+                val xml = javaClass.classLoader.getResourceAsStream("META-INF/plugin.xml")
+                    ?.readBytes()?.toString(Charsets.UTF_8)
+                val version = xml?.let { Regex("""<version>([^<]+)</version>""").find(it)?.groupValues?.get(1) }
+                version?.contains("SNAPSHOT") == true
+            }.getOrDefault(false)
         }
 
         /** The decided rule: armed by a language selection, once per popup, never mid-stream. */
