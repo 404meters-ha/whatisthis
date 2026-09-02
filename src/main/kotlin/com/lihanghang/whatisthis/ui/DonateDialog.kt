@@ -8,6 +8,7 @@ import com.intellij.util.ui.JBUI
 import java.awt.BorderLayout
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
+import javax.swing.Action
 import javax.swing.ImageIcon
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -27,6 +28,12 @@ class DonateDialog(project: Project? = null) : DialogWrapper(project) {
         isResizable = false
         init()
     }
+
+    /**
+     * DialogWrapper's default south panel ships OK **and** Cancel; a donate
+     * dialog has nothing to cancel - drop everything but 「好的」.
+     */
+    override fun createActions(): Array<Action> = arrayOf(okAction)
 
     override fun createCenterPanel(): JComponent {
         val text = JBLabel("微信扫一扫，请作者喝杯咖啡 ☕").apply {

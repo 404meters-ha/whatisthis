@@ -1,10 +1,12 @@
 package com.lihanghang.whatisthis.ui
 
 import com.intellij.icons.AllIcons
+import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
@@ -93,6 +95,10 @@ class AskPopup(
 
     /** Once the dive starts, the rest of this popup's life is the syntax session. */
     private var syntaxMode = false
+
+    /** Per-turn latency probes: wall clock at request start and at first delta. */
+    private var turnStartedAt = 0L
+    private var firstDeltaAt = 0L
 
     private val answerPane = JEditorPane().apply {
         contentType = "text/html"
@@ -255,6 +261,16 @@ class AskPopup(
     internal companion object {
         internal const val ESCAPE_ACTION = "wit-escape"
 
+        /**
+         * The ⏱ 首字/完成 latency probe is a development instrument, not a
+         * product feature: it shows in -SNAPSHOT builds only, so a release
+         * build can never ship it by forgetting to flip a switch.
+         */
+        private val showTiming: Boolean by lazy {
+            PluginManagerCore.getPlugin(PluginId.getId("com.lihanghang.whatisthis"))
+                ?.version?.contains("SNAPSHOT") == true
+        }
+
         /** The decided rule: armed by a language selection, once per popup, never mid-stream. */
         internal fun syntaxLinkVisible(hasSelection: Boolean, used: Boolean, streaming: Boolean): Boolean =
             hasSelection && !used && !streaming
@@ -326,6 +342,8 @@ class AskPopup(
 
     private fun startStream() {
         streaming = true
+        turnStartedAt = System.currentTimeMillis()
+        firstDeltaAt = 0L
         setLoading(true)
 
         val request = buildJsonObject {
@@ -371,6 +389,10 @@ class AskPopup(
             requestBody = request,
             onStart = {},
             onDelta = { delta ->
+                if (firstDeltaAt == 0L) {
+                    firstDeltaAt = System.currentTimeMillis()
+                    loadingLabel.text = " 回答中…"
+                }
                 answer.append(delta)
                 val snapshot = answer.toString()
                 onEdt { render(currentAssistant = snapshot) }
@@ -380,6 +402,7 @@ class AskPopup(
                 streaming = false
                 val cancelled = handle?.isCancelled == true
                 transcript.append(answer)
+                val hasBody = MarkdownToHtml.stripThinking(answer.toString()).isNotBlank()
                 when {
                     cancelled -> transcript.append("\n\n<i>（已取消）</i>")
                     error != null -> transcript.append("\n\n<font color=\"#e5534b\">⚠️ ")
@@ -388,9 +411,16 @@ class AskPopup(
                     // A clean finish with nothing visible is a real failure mode:
                     // thinking-only models can burn the whole budget on CoT.
                     // Never show a silent blank - same honesty rule as Preview.
-                    MarkdownToHtml.stripThinking(answer.toString()).isBlank() -> transcript.append("\n\n<font color=\"#e5534b\">⚠️ ")
+                    !hasBody -> transcript.append("\n\n<font color=\"#e5534b\">⚠️ ")
                         .append("模型未返回答案正文（输出可能被思维链耗尽），请重试或在设置中更换模型。")
                         .append("</font>")
+                }
+                // Latency probe (snapshot builds only): slow 首字 -> network/model
+                // queueing; slow finish with fast 首字 -> long generation.
+                if (showTiming && !cancelled && error == null && hasBody) {
+                    transcript.append("\n\n<i>⏱ 首字 ").append(fmt(firstDeltaAt - turnStartedAt))
+                        .append("s · 完成 ").append(fmt(System.currentTimeMillis() - turnStartedAt))
+                        .append("s</i>")
                 }
                 render(currentAssistant = "")
                 setLoading(false)
@@ -409,6 +439,7 @@ class AskPopup(
 
     private fun setLoading(loading: Boolean) {
         loadingLabel.isVisible = loading
+        if (loading) loadingLabel.text = " 思考中…"
         sendButton.isEnabled = !loading
         if (loading) {
             syntaxLink.isVisible = false
@@ -434,6 +465,9 @@ class AskPopup(
 
     private fun escape(text: String): String =
         text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    private fun fmt(ms: Long): String =
+        String.format(java.util.Locale.ROOT, "%.1f", (ms.coerceAtLeast(0)) / 1000.0)
 
     override fun dispose() {
         cancelActive()
