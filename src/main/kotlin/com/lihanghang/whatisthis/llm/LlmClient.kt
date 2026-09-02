@@ -1,5 +1,6 @@
 package com.lihanghang.whatisthis.llm
 
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.util.concurrency.AppExecutorUtil
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -60,6 +61,8 @@ class StreamHandle internal constructor(
  * no bundled libraries, smallest possible time-to-first-token.
  */
 object LlmClient {
+    private val log = Logger.getInstance(LlmClient::class.java)
+
     private val executor = AppExecutorUtil.createBoundedApplicationPoolExecutor("WhatIsThis-LLM", 4)
 
     private val client: HttpClient = HttpClient.newBuilder()
@@ -95,7 +98,7 @@ object LlmClient {
 
         val future = executor.submit {
             try {
-                val response = client.send(request, HttpResponse.BodyHandlers.ofInputStream())
+                val response = sendWithRetry(request, cancelled)
                 val body = response.body().also { streamRef.set(it) }
                 if (response.statusCode() != 200) {
                     onFinish(ApiException(response.statusCode(), readErrorBody(body)))
@@ -107,11 +110,55 @@ object LlmClient {
                 if (!cancelled.get()) onFinish(RuntimeException("请求超时：15 秒内未收到服务端响应"))
             } catch (e: Exception) {
                 // Closing the stream on cancel surfaces as IOException - that is a normal stop, not an error.
-                if (!cancelled.get()) onFinish(e)
+                if (!cancelled.get()) onFinish(friendlyText(e)?.let(::RuntimeException) ?: e)
             }
         }
 
         return StreamHandle(future, cancelled) { runCatching { streamRef.get()?.close() } }
+    }
+
+    /**
+     * One silent retry for failures that happen BEFORE the request reaches the
+     * server: flaky local proxies intermittently kill TLS handshakes ("Remote
+     * host terminated the handshake") and reset connect attempts. When the
+     * handshake dies nothing was ever delivered, so a retry cannot
+     * double-answer or double-bill - it just turns "close, reopen, works"
+     * into something the user never sees. Header timeouts (the request DID
+     * arrive, the server is merely slow) and mid-stream failures (headers
+     * received, answer partially shown) are deliberately not retried.
+     */
+    private fun sendWithRetry(request: HttpRequest, cancelled: AtomicBoolean): HttpResponse<InputStream> {
+        var last: Exception? = null
+        repeat(2) { attempt ->
+            try {
+                return client.send(request, HttpResponse.BodyHandlers.ofInputStream())
+            } catch (e: HttpTimeoutException) {
+                throw e
+            } catch (e: Exception) {
+                last = e
+                if (cancelled.get()) throw e
+                if (attempt == 0) {
+                    log.info("WhatIsThis request failed before response headers, retrying once: $e")
+                    runCatching { Thread.sleep(200) }
+                }
+            }
+        }
+        throw last ?: IllegalStateException("unreachable retry loop")
+    }
+
+    /**
+     * Connect-level failures become actionable Chinese text (the raw JDK
+     * message "Remote host terminated the handshake" sends nobody anywhere
+     * useful). Null = not a recognized connect failure, pass the error as-is.
+     */
+    internal fun friendlyText(e: Throwable): String? {
+        val message = e.message?.lowercase() ?: return null
+        return when {
+            e is java.net.ConnectException -> "无法建立连接（网络不可达或被代理阻断），请检查网络与代理设置"
+            "handshake" in message -> "TLS 握手被中断（多为 IDE/系统代理干扰），已自动重试仍失败，请检查代理设置"
+            "connection reset" in message -> "连接被重置（网络或代理不稳定），请重试"
+            else -> null
+        }
     }
 
     /** Tiny request used by the settings page "测试连接" button. */
