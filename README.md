@@ -22,14 +22,15 @@
 
 - ⚡ **为速度而生**：一次调用同时完成"分类 + 回答"，SSE 流式输出，回答限长（≤200 字要点），零第三方运行时依赖
 - 💬 **追问**：popup 底部输入框直接追问（Enter 发送，Shift+Enter 换行），Esc 关闭即弃
+- 🔬 **语法详解**：回答完成后一键追问，独立调用深挖选中代码的语法与语法糖——语法点、语法范式、跨语言对照（是不是该语言特有）、设计动机
 - 🔑 **自带 Key**：DeepSeek / 豆包·火山方舟 / 智谱 GLM / Kimi / 阿里百炼 Qwen / OpenAI / 任意 OpenAI 兼容端点，Key 存于 IDE PasswordSafe 加密存储
 - 🖼️ **视觉模型守护**：所选模型可能不支持图片时提前提醒，可"仍然发送"
 
 ## 📦 安装 / Install
 
-**从 GitHub Releases 安装（推荐）**：到 [Releases](https://github.com/404meters-ha/whatisthis/releases) 下载最新 `whatisthis-1.0.0.zip`，然后 `Settings → Plugins → ⚙️ → Install Plugin from Disk...` 选择 zip，重启 IDE。
+**从 GitHub Releases 安装（推荐）**：到 [Releases](https://github.com/404meters-ha/whatisthis/releases) 下载最新 `whatisthis-*.zip`，然后 `Settings → Plugins → ⚙️ → Install Plugin from Disk...` 选择 zip，重启 IDE。
 
-> JetBrains Marketplace 上架筹备中。/ Pending review on JetBrains Marketplace.
+> JetBrains Marketplace 审核中。/ Under review on JetBrains Marketplace.
 
 兼容 IntelliJ Platform **2024.3+** 全家桶（IDEA / PyCharm / WebStorm / GoLand / CLion / DataGrip / RustRover …）。
 
@@ -71,6 +72,14 @@
 ### 发布（维护者）
 
 打 tag `v*` 会触发 GitHub Actions：构建并校验 → 附 zip 产物创建 GitHub Release → （若配置了 `JETBRAINS_TOKEN`）发布到 JetBrains Marketplace。
+
+## ❤️ 支持作者 / Support
+
+如果 WhatIsThis 帮到了你，欢迎微信扫一扫，请作者喝杯咖啡 ☕
+
+<p align="center">
+  <img src="design/%E6%94%B6%E6%AC%BE%E7%A0%81.jpg" width="280" alt="微信收款码" />
+</p>
 
 ## License
 

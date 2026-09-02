@@ -32,6 +32,8 @@ object AskStarter {
             displayLabel = Preview.label(body),
             messageText = Prompts.textUserContent(kind, fileNote, body, languageTag),
             preview = Preview.block(body),
+            // Only recognizable-language selections get the 🔍 语法详解 button.
+            syntax = languageTag?.let { AskPopup.SyntaxSelection(kind, fileNote, body, it) },
         )
     }
 

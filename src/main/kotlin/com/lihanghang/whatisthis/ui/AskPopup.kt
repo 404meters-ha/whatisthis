@@ -11,6 +11,7 @@ import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.AnimatedIcon
 import com.intellij.ui.JBColor
+import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
@@ -30,6 +31,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.awt.BorderLayout
 import java.awt.Dimension
+import java.awt.FlowLayout
 import java.awt.Window
 import java.awt.event.ActionEvent
 import java.awt.event.HierarchyEvent
@@ -68,8 +70,29 @@ class AskPopup(
     private var handle: StreamHandle? = null
 
     @Volatile
-    private var streaming = false
+    internal var streaming = false
     private var visionConversation = false
+
+    /**
+     * What the 🔍 语法详解 follow-up needs to rebuild a FRESH session around
+     * the original selection (own system prompt, own history - never the
+     * quick answer's compressed turn). Null when the entry was a screenshot
+     * or the language is unrecognizable: no button then.
+     */
+    data class SyntaxSelection(
+        val kind: String,
+        val fileNote: String?,
+        val body: String,
+        val languageTag: String?,
+    )
+
+    private var syntaxSelection: SyntaxSelection? = null
+
+    /** Set once the syntax dive has run; the button never comes back after it. */
+    private var syntaxUsed = false
+
+    /** Once the dive starts, the rest of this popup's life is the syntax session. */
+    private var syntaxMode = false
 
     private val answerPane = JEditorPane().apply {
         contentType = "text/html"
@@ -100,6 +123,11 @@ class AskPopup(
         border = JBUI.Borders.empty(4, 6)
     }
     private val sendButton = JButton("发送")
+    private val syntaxLink = ActionLink("🔍 语法详解").apply {
+        toolTipText = "深挖这段代码的语法、范式与跨语言对照（一次独立调用）"
+        isVisible = false
+        addActionListener { startSyntaxAnalysis() }
+    }
     private val rootPanel = JPanel(BorderLayout(0, JBUI.scale(4))).apply {
         border = JBUI.Borders.empty(6, 8, 8, 8)
         background = JBColor.background()
@@ -146,9 +174,18 @@ class AskPopup(
             add(inputArea, BorderLayout.CENTER)
             add(sendButton, BorderLayout.EAST)
         }
+        val syntaxRow = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
+            isOpaque = false
+            add(syntaxLink)
+        }
+        val south = JPanel(BorderLayout(0, JBUI.scale(4))).apply {
+            isOpaque = false
+            add(syntaxRow, BorderLayout.NORTH)
+            add(inputRow, BorderLayout.CENTER)
+        }
         rootPanel.add(header, BorderLayout.NORTH)
         rootPanel.add(scrollPane, BorderLayout.CENTER)
-        rootPanel.add(inputRow, BorderLayout.SOUTH)
+        rootPanel.add(south, BorderLayout.SOUTH)
 
         sendButton.addActionListener { sendFollowUp() }
         inputArea.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "wit-send")
@@ -217,6 +254,10 @@ class AskPopup(
 
     internal companion object {
         internal const val ESCAPE_ACTION = "wit-escape"
+
+        /** The decided rule: armed by a language selection, once per popup, never mid-stream. */
+        internal fun syntaxLinkVisible(hasSelection: Boolean, used: Boolean, streaming: Boolean): Boolean =
+            hasSelection && !used && !streaming
     }
 
     /**
@@ -224,8 +265,11 @@ class AskPopup(
      * final user message (the action layer builds it via [Prompts]); [displayLabel]
      * is the short line shown in the transcript, [preview] an optional fenced
      * code block under it (see [Preview]) so long selections are never a mystery.
+     * [syntax] (first turn only) arms the 🔍 语法详解 button with what it needs
+     * to later rebuild a fresh session around this selection.
      */
-    fun askText(displayLabel: String, messageText: String, preview: String? = null) {
+    fun askText(displayLabel: String, messageText: String, preview: String? = null, syntax: SyntaxSelection? = null) {
+        syntax?.let { syntaxSelection = it }
         history += "user" to messageText
         transcript.append("**❓ ").append(displayLabel).append("**\n\n")
         if (!preview.isNullOrBlank()) {
@@ -258,6 +302,28 @@ class AskPopup(
         askText(displayLabel = Preview.label(text), messageText = text, preview = Preview.block(text))
     }
 
+    /**
+     * The one deliberate second call. Swaps to a FRESH syntax-focused session
+     * (own system prompt, history rebuilt from the original selection) while
+     * the transcript keeps showing everything that came before. Runs once per
+     * popup; afterwards ordinary follow-ups continue on the syntax session.
+     */
+    private fun startSyntaxAnalysis() {
+        val selection = syntaxSelection ?: return
+        if (streaming) return
+        syntaxUsed = true
+        syntaxMode = true
+        history.clear()
+        history += "user" to Prompts.textUserContent(selection.kind, selection.fileNote, selection.body, selection.languageTag)
+        transcript.append("**🔍 语法详解**\n\n")
+        render(currentAssistant = "")
+        startStream()
+    }
+
+    internal fun updateSyntaxLink() {
+        syntaxLink.isVisible = syntaxLinkVisible(syntaxSelection != null, syntaxUsed, streaming)
+    }
+
     private fun startStream() {
         streaming = true
         setLoading(true)
@@ -279,7 +345,11 @@ class AskPopup(
             put("messages", buildJsonArray {
                 add(buildJsonObject {
                     put("role", "system")
-                    put("content", Prompts.systemPrompt(vision = visionConversation, language = config.language))
+                    put("content", if (syntaxMode) {
+                        Prompts.syntaxSystemPrompt(config.language)
+                    } else {
+                        Prompts.systemPrompt(vision = visionConversation, language = config.language)
+                    })
                 })
                 history.forEach { (role, content) ->
                     add(buildJsonObject {
@@ -340,6 +410,11 @@ class AskPopup(
     private fun setLoading(loading: Boolean) {
         loadingLabel.isVisible = loading
         sendButton.isEnabled = !loading
+        if (loading) {
+            syntaxLink.isVisible = false
+        } else {
+            updateSyntaxLink()
+        }
         // inputArea stays enabled: it is the popup's focus target, and
         // disabling it in the same dispatch as show() breaks the focus grant
         // (focus snaps back to the editor, the focus net sees a loss, and the

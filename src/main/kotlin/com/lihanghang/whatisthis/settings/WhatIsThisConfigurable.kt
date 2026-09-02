@@ -13,6 +13,7 @@ import com.lihanghang.whatisthis.llm.ApiException
 import com.lihanghang.whatisthis.llm.LlmClient
 import com.lihanghang.whatisthis.llm.ProviderPreset
 import com.lihanghang.whatisthis.llm.Providers
+import com.lihanghang.whatisthis.ui.DonateDialog
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
@@ -40,6 +41,7 @@ class WhatIsThisConfigurable : com.intellij.openapi.options.Configurable, com.in
     private var languageCombo: JComboBox<String>? = null
     private var testButton: JButton? = null
     private var testStatus: JBLabel? = null
+    private var donateLink: ActionLink? = null
 
     /** providerId -> edited-but-not-yet-applied key ("" = cleared). */
     private val keyEdits = mutableMapOf<String, String>()
@@ -75,6 +77,9 @@ class WhatIsThisConfigurable : com.intellij.openapi.options.Configurable, com.in
         this.testStatus = testStatus
         testButton.addActionListener { runTest() }
 
+        val donateLink = ActionLink("❤ 支持作者") { DonateDialog().show() }
+        this.donateLink = donateLink
+
         reset()
 
         // Attach after reset() so the programmatic selection change does not
@@ -89,7 +94,7 @@ class WhatIsThisConfigurable : com.intellij.openapi.options.Configurable, com.in
             .addLabeledComponent("API Key:", rowOf(keyField, keyLink))
             .addLabeledComponent("Base URL（仅自定义服务商需要）:", baseUrlField)
             .addLabeledComponent("回答语言:", languageCombo)
-            .addComponent(rowOf(testButton, testStatus))
+            .addComponent(rowOf(testButton, testStatus, donateLink))
             .addComponent(privacyNote())
             .panel
     }
@@ -254,6 +259,7 @@ class WhatIsThisConfigurable : com.intellij.openapi.options.Configurable, com.in
         languageCombo = null
         testButton = null
         testStatus = null
+        donateLink = null
         keyEdits.clear()
         loadedProviderId = ""
     }
