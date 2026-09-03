@@ -6,6 +6,7 @@
 [![Build & Verify](https://github.com/404meters-ha/whatisthis/actions/workflows/build.yml/badge.svg)](https://github.com/404meters-ha/whatisthis/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![IntelliJ Platform](https://img.shields.io/badge/IntelliJ%20Platform-2024.3%2B-blue)](https://plugins.jetbrains.com/docs/intellij/build-number-ranges.html)
+[![JetBrains Marketplace](https://img.shields.io/jetbrains/plugin/v/33977-whatisthis?label=Marketplace)](https://plugins.jetbrains.com/plugin/33977-whatisthis)
 
 ![demo](design/whatisthis-demo.gif)
 
@@ -28,9 +29,9 @@
 
 ## 📦 安装 / Install
 
-**从 GitHub Releases 安装（推荐）**：到 [Releases](https://github.com/404meters-ha/whatisthis/releases) 下载最新 `whatisthis-*.zip`，然后 `Settings → Plugins → ⚙️ → Install Plugin from Disk...` 选择 zip，重启 IDE。
+**从 JetBrains Marketplace 安装（推荐）**：`Settings → Plugins → Marketplace` 搜索 **WhatIsThis** 直接安装，或访问[插件页](https://plugins.jetbrains.com/plugin/33977-whatisthis)。
 
-> JetBrains Marketplace 审核中。/ Under review on JetBrains Marketplace.
+**从 GitHub Releases 安装**：到 [Releases](https://github.com/404meters-ha/whatisthis/releases) 下载最新 `whatisthis-*.zip`，然后 `Settings → Plugins → ⚙️ → Install Plugin from Disk...` 选择 zip，重启 IDE。
 
 兼容 IntelliJ Platform **2024.3+** 全家桶（IDEA / PyCharm / WebStorm / GoLand / CLion / DataGrip / RustRover …）。
 
